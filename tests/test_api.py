@@ -46,3 +46,20 @@ def test_metrics_exposed(client, sample_patient):
     assert "http_requests_total" in text
     assert "model_predictions_total" in text
     assert 'model_info{name="test_lr"' in text
+
+
+def test_metric_labels_are_bounded(client):
+    """Unknown paths must collapse to one label, not one time series per URL."""
+    for path in ("/wp-admin", "/.env", "/random-123"):
+        assert client.get(path).status_code == 404
+    text = client.get("/metrics").text
+    assert 'route="unmatched"' in text
+    assert "/wp-admin" not in text and "/random-123" not in text
+
+
+def test_request_id_is_validated(client, sample_patient):
+    ok = client.post("/predict", json=sample_patient, headers={"x-request-id": "abc-123"})
+    assert ok.headers["x-request-id"] == "abc-123"
+    bad = client.post("/predict", json=sample_patient, headers={"x-request-id": "x" * 500})
+    assert bad.headers["x-request-id"] != "x" * 500
+    assert len(bad.headers["x-request-id"]) == 32  # freshly minted uuid4 hex

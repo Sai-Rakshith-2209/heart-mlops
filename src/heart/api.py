@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 import time
 import uuid
@@ -189,10 +190,26 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Heart Disease Risk API", version="1.0.0", lifespan=lifespan)
 
 
+# Accept a caller's request id only if it is short and safe; otherwise mint our own.
+_REQUEST_ID_RE = re.compile(r"[A-Za-z0-9._-]{1,64}")
+_KNOWN_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+
+
+def _route_label(request: Request) -> str:
+    """Metric label = matched route template, never the raw path.
+
+    Raw paths are attacker-controlled: labelling by them lets any scanner create an
+    unbounded number of Prometheus time series (cardinality explosion / memory DoS).
+    """
+    route = request.scope.get("route")
+    return getattr(route, "path", None) or "unmatched"
+
+
 @app.middleware("http")
 async def access_log(request: Request, call_next):
-    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
-    route = request.url.path
+    supplied = request.headers.get("x-request-id", "")
+    request_id = supplied if _REQUEST_ID_RE.fullmatch(supplied) else uuid.uuid4().hex
+    method = request.method if request.method in _KNOWN_METHODS else "OTHER"
     start = time.perf_counter()
     status = 500
     try:
@@ -202,16 +219,17 @@ async def access_log(request: Request, call_next):
         return response
     finally:
         elapsed = time.perf_counter() - start
+        route = _route_label(request)
         if route != "/metrics":
-            REQUESTS.labels(request.method, route, str(status)).inc()
+            REQUESTS.labels(method, route, str(status)).inc()
             LATENCY.labels(route).observe(elapsed)
             log.info(
                 "request",
                 extra={
                     "extra_fields": {
                         "request_id": request_id,
-                        "method": request.method,
-                        "path": route,
+                        "method": method,
+                        "route": route,
                         "status": status,
                         "latency_ms": round(elapsed * 1000, 2),
                         "client": request.client.host if request.client else None,
