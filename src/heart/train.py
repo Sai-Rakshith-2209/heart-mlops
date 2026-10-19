@@ -37,6 +37,7 @@ from sklearn.metrics import (  # noqa: E402
     RocCurveDisplay,
     accuracy_score,
     f1_score,
+    make_scorer,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -49,7 +50,15 @@ from heart.features import build_pipeline  # noqa: E402
 
 os.environ.setdefault("MLFLOW_DISABLE_TELEMETRY", "true")
 log = logging.getLogger("heart.train")
-SCORING = ["accuracy", "precision", "recall", "f1", "roc_auc"]
+# Explicit zero_division: an over-regularised candidate (e.g. L1 with C=0.01) zeroes every
+# coefficient and predicts no positives; its precision/F1 is then defined as 0, not a warning.
+SCORING = {
+    "accuracy": "accuracy",
+    "precision": make_scorer(precision_score, zero_division=0),
+    "recall": "recall",
+    "f1": make_scorer(f1_score, zero_division=0),
+    "roc_auc": "roc_auc",
+}
 EXPERIMENT = "heart-disease-classifier"
 
 

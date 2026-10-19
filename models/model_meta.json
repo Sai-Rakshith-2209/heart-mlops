@@ -1,7 +1,7 @@
 {
   "model_name": "logistic_regression",
   "model_version": "1.0.0",
-  "mlflow_run_id": "4ea167ff7e524e3084eeeee2d073e816",
+  "mlflow_run_id": "0c3d0796b1914585bec150734270bfa4",
   "best_params": {
     "C": 1.0,
     "penalty": "l2"
@@ -35,7 +35,7 @@
     "thal"
   ],
   "data_sha256": "e81973d3356c231ed8903aab16f5faa72d9679eb8ef6dc98a602b25df3f5d23d",
-  "trained_at": "2026-10-19T19:16:33+00:00",
-  "python": "3.13.16",
-  "sklearn": "1.9.1"
+  "trained_at": "2026-10-19T20:23:11+00:00",
+  "python": "3.11.5",
+  "sklearn": "1.7.2"
 }
