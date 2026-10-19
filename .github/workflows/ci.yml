@@ -1,0 +1,148 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  IMAGE: ghcr.io/${{ github.repository_owner }}/heart-disease-api
+  MLFLOW_DISABLE_TELEMETRY: "true"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install ruff==0.17.1
+      - name: Ruff lint
+        run: ruff check --output-format=github .
+      - name: Ruff format check
+        run: ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt -e .
+      - name: Unit tests
+        run: pytest -v --junitxml=test-results/junit.xml
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+
+  train:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt -e .
+      - name: Acquire and clean data
+        run: python -m heart.data
+      - name: EDA
+        run: python -m heart.eda
+      - name: Train, tune and track (MLflow)
+        run: python -m heart.train 2>&1 | tee train.log
+      - name: Model quality gate
+        run: |
+          python - <<'EOF'
+          import json, sys
+          m = json.load(open("models/model_meta.json"))["metrics"]
+          print(json.dumps(m, indent=2))
+          gates = {"cv_roc_auc": 0.85, "test_roc_auc": 0.85, "test_recall": 0.80}
+          failed = {k: m[k] for k, t in gates.items() if m[k] < t}
+          if failed:
+              sys.exit(f"Quality gate failed: {failed} (thresholds {gates})")
+          print("Quality gate passed")
+          EOF
+      - name: Upload model
+        uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: models/
+      - name: Upload MLflow store, reports and logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-and-reports
+          path: |
+            mlflow.db
+            mlruns/
+            reports/
+            train.log
+
+  docker:
+    needs: train
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use the model trained in this run
+        uses: actions/download-artifact@v4
+        with:
+          name: model
+          path: models/
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: heart-disease-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test container
+        run: |
+          docker run -d --name api -p 8000:8000 heart-disease-api:ci
+          for i in $(seq 1 30); do curl -sf localhost:8000/ready && break; sleep 1; done
+          curl -sf -X POST localhost:8000/predict -H 'Content-Type: application/json' \
+            -d @sample_request.json | tee prediction.json
+          python3 -c "import json; r=json.load(open('prediction.json')); assert r['prediction'] in (0,1) and 0.5<=r['confidence']<=1"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8000/predict \
+            -H 'Content-Type: application/json' -d '{"age": 999}')
+          test "$code" = "422"
+          docker logs api | tail -20
+      - name: Scan image (fail on fixable CRITICAL)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: heart-disease-api:ci
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Push to GHCR (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          IMG=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
+          docker tag heart-disease-api:ci "$IMG:${GITHUB_SHA::7}"
+          docker tag heart-disease-api:ci "$IMG:latest"
+          docker push "$IMG:${GITHUB_SHA::7}"
+          docker push "$IMG:latest"

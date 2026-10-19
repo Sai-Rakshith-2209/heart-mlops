@@ -1,0 +1,36 @@
+# Local stack: API + Prometheus + Grafana.
+#   export GRAFANA_ADMIN_PASSWORD=$(openssl rand -hex 12)
+#   docker compose up -d --build
+# API http://localhost:8000/docs | Prometheus http://localhost:9090 | Grafana http://localhost:3000
+services:
+  api:
+    build: .
+    image: heart-disease-api:1.0.0
+    ports: ["127.0.0.1:8000:8000"]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    ports: ["127.0.0.1:9090:9090"]
+    volumes:
+      - ./monitoring/prometheus.compose.yml:/etc/prometheus/prometheus.yml:ro
+      - ./k8s/monitoring/config/alerts.yml:/etc/prometheus/alerts.yml:ro
+    depends_on: [api]
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    ports: ["127.0.0.1:3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/heart-api-dashboard.json
+    volumes:
+      - ./k8s/monitoring/config/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      - ./k8s/monitoring/config/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./k8s/monitoring/config/heart-api-dashboard.json:/var/lib/grafana/dashboards/heart-api-dashboard.json:ro
+    depends_on: [prometheus]

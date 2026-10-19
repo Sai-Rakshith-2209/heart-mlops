@@ -1,0 +1,7 @@
+*
+!requirements-serve.txt
+!src/heart/__init__.py
+!src/heart/config.py
+!src/heart/api.py
+!models/model.joblib
+!models/model_meta.json

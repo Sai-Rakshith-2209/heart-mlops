@@ -1,0 +1,10 @@
+# Minimal runtime for the serving container. scikit-learn/numpy/pandas/joblib MUST match
+# the training environment exactly, because the model artifact is a fitted sklearn object.
+numpy==2.5.3
+pandas==3.0.5
+scikit-learn==1.9.1
+joblib==1.6.0
+fastapi==0.149.0
+uvicorn==0.54.0
+pydantic==2.13.5
+prometheus-client==0.26.0
