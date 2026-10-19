@@ -1,6 +1,6 @@
 # Full environment: data, EDA, training, experiment tracking and serving.
 -r requirements-serve.txt
-matplotlib==3.11.2
+matplotlib==3.10.9
 seaborn==0.13.2
 mlflow==3.17.1
 skops==0.16.0

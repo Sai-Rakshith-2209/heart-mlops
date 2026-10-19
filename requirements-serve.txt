@@ -1,10 +1,11 @@
+# Pinned to versions that support Python 3.10-3.12 (Prayogshala 3.10, local 3.11, CI 3.11).
 # Minimal runtime for the serving container. scikit-learn/numpy/pandas/joblib MUST match
 # the training environment exactly, because the model artifact is a fitted sklearn object.
-numpy==2.5.3
-pandas==3.0.5
-scikit-learn==1.9.1
+numpy==2.2.6
+pandas==2.3.3
+scikit-learn==1.7.2
 joblib==1.6.0
 fastapi==0.149.0
 uvicorn==0.54.0
-pydantic==2.13.5
+pydantic==2.14.1
 prometheus-client==0.26.0

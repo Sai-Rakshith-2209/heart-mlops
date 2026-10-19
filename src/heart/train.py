@@ -15,7 +15,7 @@ import json
 import logging
 import os
 import platform
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 import joblib
 import matplotlib
@@ -266,7 +266,7 @@ def train(tracking_uri: str, n_jobs: int = -1) -> dict:
         "decision_threshold": 0.5,
         "features": config.FEATURES,
         "data_sha256": data_hash,
-        "trained_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "python": platform.python_version(),
         "sklearn": sklearn.__version__,
     }
