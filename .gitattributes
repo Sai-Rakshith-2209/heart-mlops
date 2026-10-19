@@ -1,0 +1,13 @@
+# Normalise line endings in the repo to LF on every OS. Shell scripts, YAML and the
+# Dockerfile are executed on Linux (Docker, Kubernetes, CI, Prayogshala), where CRLF breaks them.
+* text=auto eol=lf
+
+*.sh text eol=lf
+
+# Binary files: never touch.
+*.png binary
+*.jpg binary
+*.joblib binary
+*.docx binary
+*.pdf binary
+*.db binary

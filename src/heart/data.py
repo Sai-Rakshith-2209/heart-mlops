@@ -6,8 +6,10 @@ import argparse
 import hashlib
 import io
 import logging
+import ssl
 import urllib.request
 
+import certifi
 import numpy as np
 import pandas as pd
 
@@ -39,8 +41,13 @@ _MIRROR_RENAME = {
 }
 
 
+# One explicit, pinned CA bundle (Mozilla roots via certifi) on every machine, instead of
+# whatever the OS store happens to contain. Verification stays fully enabled.
+_TLS_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+
+
 def _fetch(url: str, timeout: int = 30) -> bytes:
-    with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 (fixed https URLs)
+    with urllib.request.urlopen(url, timeout=timeout, context=_TLS_CONTEXT) as resp:  # noqa: S310
         return resp.read()
 
 
@@ -67,7 +74,7 @@ def download(dest=config.RAW_PATH) -> pd.DataFrame:
         df = parse_mirror(_fetch(config.MIRROR_URL))
         source = config.MIRROR_URL
     dest.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(dest, index=False)
+    df.to_csv(dest, index=False, lineterminator="\n")
     log.info("Saved %d rows from %s to %s", len(df), source, dest)
     return df
 
@@ -111,7 +118,8 @@ def main() -> None:
     raw = pd.read_csv(config.RAW_PATH) if args.skip_download else download()
     cleaned = clean(raw)
     config.CLEAN_PATH.parent.mkdir(parents=True, exist_ok=True)
-    cleaned.to_csv(config.CLEAN_PATH, index=False)
+    # Force LF so the file (and its SHA-256) is byte-identical on Windows and Linux.
+    cleaned.to_csv(config.CLEAN_PATH, index=False, lineterminator="\n")
     log.info(
         "Clean data: %d rows, %d missing cells, positive rate %.3f -> %s",
         len(cleaned),

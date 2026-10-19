@@ -248,7 +248,7 @@ def train(tracking_uri: str, n_jobs: int = -1) -> dict:
     champion = results.iloc[0]
     comparison_plot(results, config.FIG_DIR / "model_comparison.png")
     results.drop(columns=["best_params"]).to_csv(
-        config.ROOT / "reports" / "model_comparison.csv", index=False
+        config.ROOT / "reports" / "model_comparison.csv", index=False, lineterminator="\n"
     )
 
     config.MODEL_DIR.mkdir(parents=True, exist_ok=True)
