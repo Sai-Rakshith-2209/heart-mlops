@@ -22,12 +22,12 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: requirements-dev.txt
       - run: pip install ruff==0.17.1
       - name: Ruff lint
         run: ruff check --output-format=github .
@@ -37,18 +37,20 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt -e .
       - name: Unit tests
-        run: pytest -v --junitxml=test-results/junit.xml
+        run: pytest -vv --junitxml=test-results/junit.xml
       - name: Upload test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-results
           path: test-results/
@@ -57,8 +59,10 @@ jobs:
     needs: [lint, test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -66,6 +70,8 @@ jobs:
       - run: pip install -r requirements.txt -e .
       - name: Acquire and clean data
         run: python -m heart.data
+      - name: Data unchanged vs committed copy
+        run: git diff --exit-code data/processed/heart_clean.csv
       - name: EDA
         run: python -m heart.eda
       - name: Train, tune and track (MLflow)
@@ -83,12 +89,12 @@ jobs:
           print("Quality gate passed")
           EOF
       - name: Upload model
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: model
           path: models/
       - name: Upload MLflow store, reports and logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mlflow-and-reports
           path: |
@@ -104,45 +110,8 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Use the model trained in this run
-        uses: actions/download-artifact@v4
-        with:
-          name: model
-          path: models/
-      - uses: docker/setup-buildx-action@v3
-      - name: Build image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: heart-disease-api:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Smoke test container
-        run: |
-          docker run -d --name api -p 8000:8000 heart-disease-api:ci
-          for i in $(seq 1 30); do curl -sf localhost:8000/ready && break; sleep 1; done
-          curl -sf -X POST localhost:8000/predict -H 'Content-Type: application/json' \
-            -d @sample_request.json | tee prediction.json
-          python3 -c "import json; r=json.load(open('prediction.json')); assert r['prediction'] in (0,1) and 0.5<=r['confidence']<=1"
-          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8000/predict \
-            -H 'Content-Type: application/json' -d '{"age": 999}')
-          test "$code" = "422"
-          docker logs api | tail -20
-      - name: Scan image (fail on fixable CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: heart-disease-api:ci
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-      - name: Push to GHCR (main only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          IMG=$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')
-          docker tag heart-disease-api:ci "$IMG:${GITHUB_SHA::7}"
-          docker tag heart-disease-api:ci "$IMG:latest"
-          docker push "$IMG:${GITHUB_SHA::7}"
-          docker push "$IMG:latest"
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

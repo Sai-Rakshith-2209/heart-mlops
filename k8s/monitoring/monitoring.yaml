@@ -1,23 +1,23 @@
 # Prometheus only needs read access to pods for service discovery.
 apiVersion: v1
 kind: ServiceAccount
-metadata: {name: prometheus}
+metadata: { name: prometheus }
 ---
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: prometheus, labels: {app: prometheus}}
+metadata: { name: prometheus, labels: { app: prometheus } }
 spec:
   replicas: 1
-  selector: {matchLabels: {app: prometheus}}
+  selector: { matchLabels: { app: prometheus } }
   template:
-    metadata: {labels: {app: prometheus}}
+    metadata: { labels: { app: prometheus } }
     spec:
       serviceAccountName: prometheus
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534
         fsGroup: 65534
-        seccompProfile: {type: RuntimeDefault}
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: prometheus
           image: prom/prometheus:v3.5.0
@@ -25,77 +25,90 @@ spec:
             - --config.file=/etc/prometheus/prometheus.yml
             - --storage.tsdb.path=/prometheus
             - --storage.tsdb.retention.time=2d
-          ports: [{name: http, containerPort: 9090}]
-          readinessProbe: {httpGet: {path: /-/ready, port: http}}
+          ports: [{ name: http, containerPort: 9090 }]
+          readinessProbe: { httpGet: { path: /-/ready, port: http } }
           resources:
-            requests: {cpu: 100m, memory: 256Mi}
-            limits: {memory: 512Mi}
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
+            capabilities: { drop: [ALL] }
           volumeMounts:
-            - {name: config, mountPath: /etc/prometheus}
-            - {name: data, mountPath: /prometheus}
+            - { name: config, mountPath: /etc/prometheus }
+            - { name: data, mountPath: /prometheus }
       volumes:
-        - {name: config, configMap: {name: prometheus-config}}
-        - {name: data, emptyDir: {}}
+        - { name: config, configMap: { name: prometheus-config } }
+        - { name: data, emptyDir: {} }
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: prometheus}
+metadata: { name: prometheus }
 spec:
-  selector: {app: prometheus}
-  ports: [{name: http, port: 9090, targetPort: http}]
+  selector: { app: prometheus }
+  ports: [{ name: http, port: 9090, targetPort: http }]
 ---
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: grafana, labels: {app: grafana}}
+metadata: { name: grafana, labels: { app: grafana } }
 spec:
   replicas: 1
-  selector: {matchLabels: {app: grafana}}
+  selector: { matchLabels: { app: grafana } }
   template:
-    metadata: {labels: {app: grafana}}
+    metadata: { labels: { app: grafana } }
     spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 472
         fsGroup: 472
-        seccompProfile: {type: RuntimeDefault}
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: grafana
           image: grafana/grafana:12.1.0
-          ports: [{name: http, containerPort: 3000}]
+          ports: [{ name: http, containerPort: 3000 }]
           env:
             - name: GF_SECURITY_ADMIN_PASSWORD
-              valueFrom: {secretKeyRef: {name: grafana-admin, key: password}}
-            - {name: GF_USERS_ALLOW_SIGN_UP, value: "false"}
-            - {name: GF_ANALYTICS_REPORTING_ENABLED, value: "false"}
-            - {name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH, value: /var/lib/grafana/dashboards/heart-api-dashboard.json}
-          readinessProbe: {httpGet: {path: /api/health, port: http}}
+              valueFrom:
+                { secretKeyRef: { name: grafana-admin, key: password } }
+            - { name: GF_USERS_ALLOW_SIGN_UP, value: "false" }
+            - { name: GF_ANALYTICS_REPORTING_ENABLED, value: "false" }
+            - { name: GF_LOG_MODE, value: console } # root FS is read-only: no log files
+            - {
+                name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH,
+                value: /var/lib/grafana/dashboards/heart-api-dashboard.json,
+              }
+          readinessProbe: { httpGet: { path: /api/health, port: http } }
           resources:
-            requests: {cpu: 50m, memory: 128Mi}
-            limits: {memory: 384Mi}
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 384Mi }
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
+            capabilities: { drop: [ALL] }
           volumeMounts:
-            - {name: storage, mountPath: /var/lib/grafana}
-            - {name: tmp, mountPath: /tmp}
-            - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources/datasource.yaml, subPath: datasource.yaml}
-            - {name: provisioning, mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml, subPath: dashboards.yaml}
-            - {name: dashboards, mountPath: /var/lib/grafana/dashboards}
+            - { name: storage, mountPath: /var/lib/grafana }
+            - { name: tmp, mountPath: /tmp }
+            - {
+                name: provisioning,
+                mountPath: /etc/grafana/provisioning/datasources/datasource.yaml,
+                subPath: datasource.yaml,
+              }
+            - {
+                name: provisioning,
+                mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml,
+                subPath: dashboards.yaml,
+              }
+            - { name: dashboards, mountPath: /var/lib/grafana/dashboards }
       volumes:
-        - {name: storage, emptyDir: {}}
-        - {name: tmp, emptyDir: {}}
-        - {name: provisioning, configMap: {name: grafana-provisioning}}
-        - {name: dashboards, configMap: {name: grafana-dashboards}}
+        - { name: storage, emptyDir: {} }
+        - { name: tmp, emptyDir: {} }
+        - { name: provisioning, configMap: { name: grafana-provisioning } }
+        - { name: dashboards, configMap: { name: grafana-dashboards } }
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: grafana}
+metadata: { name: grafana }
 spec:
-  selector: {app: grafana}
-  ports: [{name: http, port: 3000, targetPort: http}]
+  selector: { app: grafana }
+  ports: [{ name: http, port: 3000, targetPort: http }]
