@@ -8,7 +8,7 @@ groups:
         annotations: {summary: "No heart-api replica is being scraped"}
       - alert: HeartApiHighErrorRate
         expr: |
-          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          (sum(rate(http_requests_total{status=~"5.."}[5m])) or vector(0))
             / clamp_min(sum(rate(http_requests_total[5m])), 1e-9) > 0.05
         for: 5m
         labels: {severity: warning}
