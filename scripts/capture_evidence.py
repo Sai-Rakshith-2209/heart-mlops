@@ -54,12 +54,8 @@ def main() -> None:
         """Run one capture; record a failure instead of aborting the others."""
         try:
             action()
-        except (
-            Exception
-        ) as exc:  # noqa: BLE001 - report every failed capture at the end
-            failures.append(
-                f"{name}: {exc.__class__.__name__}: {str(exc).splitlines()[0]}"
-            )
+        except Exception as exc:  # noqa: BLE001 - report every failed capture at the end
+            failures.append(f"{name}: {exc.__class__.__name__}: {str(exc).splitlines()[0]}")
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -70,9 +66,7 @@ def main() -> None:
             extra_http_headers={"Authorization": f"Basic {auth}"},
             **BROWSER_SETTINGS,
         )
-        plain = browser.new_context(
-            viewport={"width": 1600, "height": 900}, **BROWSER_SETTINGS
-        )
+        plain = browser.new_context(viewport={"width": 1600, "height": 900}, **BROWSER_SETTINGS)
 
         def grafana_dashboard() -> None:
             page = grafana.new_page()
@@ -81,18 +75,14 @@ def main() -> None:
                 wait_until="load",
             )
             # Live UIs poll continuously, so "network idle" never comes: wait for content.
-            page.get_by_text("Requests / s").filter(visible=True).first.wait_for(
-                timeout=60000
-            )
+            page.get_by_text("Requests / s").filter(visible=True).first.wait_for(timeout=60000)
             page.wait_for_timeout(10000)  # let every panel finish querying Prometheus
             page.screenshot(path=out / "09_grafana_dashboard.png", full_page=True)
 
         def prometheus_targets() -> None:
             page = plain.new_page()
             page.goto(f"{a.prometheus}/targets", wait_until="load")
-            page.get_by_text("/metrics").filter(visible=True).first.wait_for(
-                timeout=60000
-            )
+            page.get_by_text("/metrics").filter(visible=True).first.wait_for(timeout=60000)
             page.wait_for_timeout(1000)
             page.screenshot(path=out / "08_prometheus_targets.png", full_page=True)
 
@@ -113,9 +103,7 @@ def main() -> None:
             f = out / src
             if f.exists():
                 page.set_content(terminal_html(src, f.read_text()))
-                shoot(
-                    dst, lambda dst=dst: page.screenshot(path=out / dst, full_page=True)
-                )
+                shoot(dst, lambda dst=dst: page.screenshot(path=out / dst, full_page=True))
         browser.close()
 
     print("screenshots:", sorted(x.name for x in out.glob("*.png")))
